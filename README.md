@@ -1,0 +1,1 @@
+基于Change Tracking审计日志实现的Kafka Connector，实现SQL Server到Greenplum的数据同步
