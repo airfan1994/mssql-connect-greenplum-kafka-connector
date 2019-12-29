@@ -2,5 +2,9 @@
 <classpath>
 	<classpathentry kind="con" path="org.eclipse.jdt.launching.JRE_CONTAINER/org.eclipse.jdt.internal.debug.ui.launcher.StandardVMType/JavaSE-1.8"/>
 	<classpathentry kind="src" path="src"/>
+	<classpathentry kind="lib" path="/Users/airfan/workspace/javaworkspacce/mssql-connect-greenplum-kafka-connector-ct/lib/connect-api-2.3.1.jar"/>
+	<classpathentry kind="lib" path="/Users/airfan/workspace/javaworkspacce/mssql-connect-greenplum-kafka-connector-ct/lib/kafka-clients-2.3.1.jar"/>
+	<classpathentry kind="lib" path="/Users/airfan/workspace/javaworkspacce/mssql-connect-greenplum-kafka-connector-ct/lib/postgresql-42.2.8.jre6.jar"/>
+	<classpathentry kind="lib" path="/Users/airfan/workspace/javaworkspacce/mssql-connect-greenplum-kafka-connector-ct/lib/sqljdbc42.jar"/>
 	<classpathentry kind="output" path="bin"/>
 </classpath>
