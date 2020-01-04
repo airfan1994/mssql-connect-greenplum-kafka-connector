@@ -5,9 +5,13 @@ import java.sql.DriverManager;
 import java.sql.ResultSet;
 import java.sql.Statement;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
+import java.util.*;
+import java.io.*;
 
+import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.source.SourceRecord;
 import org.apache.kafka.connect.source.SourceTask;
 
@@ -25,6 +29,7 @@ public class MssqlSourceTask extends SourceTask{
 	String topic;
 	long lastSyncVersion = 0L;
 	String gpTable;
+	int primaryType;
 	
 	public Connection getMssqlConncetion() throws Exception {
 		String msDriverName = "com.microsoft.sqlserver.jdbc.SQLServerDriver";
@@ -84,7 +89,7 @@ public class MssqlSourceTask extends SourceTask{
 					}
 					updateBuffer.append(")");
 					updateBuffer.append(constructPrimaryQuery(key));
-					records.add(makeSR(key, updateBuffer.toString(), lastSyncVersion))
+					records.add(makeSR(key, updateBuffer.toString(), lastSyncVersion));
 				}
 				else {
 					throw new Exception("unsupported CT log.");
@@ -102,7 +107,23 @@ public class MssqlSourceTask extends SourceTask{
 	@Override
 	public void start(Map<String, String> arg0) {
 		// TODO Auto-generated method stub
-		
+		this.dbURL = arg0.get("dbURL");
+		this.userName = arg0.get("userName");
+		this.userPwd = arg0.get("userPwd");
+		this.tableName = arg0.get("tableName");
+		this.primaryKey = arg0.get("primaryKey");
+		try {
+			dbConn = getMssqlConncetion();
+			String configFile = arg0.get("configFile");
+			parsePars(configFile);
+			parsePrimaryType(arg0.get("primaryTypeStr"));
+			stmt = dbConn.createStatement();
+		}
+		catch(Exception e) {
+			e.printStackTrace();
+		}
+		this.topic = arg0.get("topic");
+		this.gpTable = arg0.get("gpTable");
 	}
 
 	@Override
@@ -115,5 +136,83 @@ public class MssqlSourceTask extends SourceTask{
 			e.printStackTrace();
 		}
 	}
-
+	
+	public void parsePars(String configFile) throws Exception{
+		HashSet<String> numType = new HashSet<String>(Arrays.asList("tinyint,smallint,int,bigint,numeric,demcimal,float,real".split(",")));
+		HashSet<String> strType = new HashSet<String>(Arrays.asList("char,varchar,string,text,nchar,nvarchar,ntext,date,time,datetime,datetime2,smalldatetime,datetimeoffset".split(",")));
+		BufferedReader br = new BufferedReader(new FileReader(configFile));
+		String line;
+		int i = 0;
+		while((line = br.readLine()) != null) {
+			String[] parts = line.split(",");
+			if (colName == null) {
+				colName = new String[parts.length];
+				colType = new int[parts.length];
+			}
+			colName[i] = parts[0];
+			if(numType.contains(parts[1])) {
+				colType[i] = 0;
+			}
+			else if(strType.contains(parts[0])) {
+				colType[i] = 1;
+			}
+			else{
+				throw new Exception("unsupported data type");
+			}
+			i++;
+		}
+		br.close();
+	}
+	public void parsePrimaryType(String primaryTypeStr) throws Exception {
+		HashSet<String> numType = new HashSet<String>(Arrays.asList("tinyint,smallint,int,bigint,numeric,demcimal,float,real".split(",")));
+		HashSet<String> strType = new HashSet<String>(Arrays.asList("char,varchar,string,text,nchar,nvarchar,ntext,date,time,datetime,datetime2,smalldatetime,datetimeoffset".split(",")));
+		if(numType.contains(primaryTypeStr)) {
+			this.primaryType = 0;
+		}
+		else if(strType.contains(primaryTypeStr)) {
+			this.primaryType = 1;
+		}
+		else {
+			throw new Exception("unsupported data type");
+		}
+	}
+	public long getCurrentVersion() throws Exception {
+		Statement stmt = dbConn.createStatement();
+		ResultSet res = stmt.executeQuery("select CHANGE_TRACKING_CURRENT_VERSION()");
+		res.next();
+		return res.getLong(1);
+	}
+	
+	public SourceRecord makeSR(String key, String value, long version) {
+		Map<String, Object> sourcePartition = Collections.singletonMap("filename", "sqlserver");
+		Map<String, Object> sourceOffset = Collections.singletonMap("position", version + "_" + key);
+		return new SourceRecord(sourcePartition, sourceOffset, topic, Schema.STRING_SCHEMA, value);
+	}
+	
+	public String constructPrimaryQuery(String key) {
+		if (primaryType == 0) {
+			return "where" + primaryKey + "=" + key;
+		}
+		else {
+			return "where" + primaryKey + "='" + key + "'";
+		}
+	}
+	public StringBuffer getValFromRes(ResultSet res) throws Exception {
+		StringBuffer sb = new StringBuffer();
+		for (int i = 0; i < colName.length; i++) {
+			if (i != 0) {
+				sb.append(",");
+			}
+			if (colType[i] == 1) {
+				sb.append("'");
+				sb.append(res.getString(i + 3));
+				sb.append("'");
+			}
+			else {
+				sb.append(res.getString(i + 3));
+			}
+		}
+		return sb;
+			
+	}
 }
